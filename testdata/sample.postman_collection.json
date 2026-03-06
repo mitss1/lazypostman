@@ -1,0 +1,150 @@
+{
+  "info": {
+    "name": "Sample API",
+    "description": "A sample collection for testing LazyPostman",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/users",
+              "host": ["{{base_url}}"],
+              "path": ["users"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            },
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ]
+          }
+        },
+        {
+          "name": "Get User",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/users/1",
+              "host": ["{{base_url}}"],
+              "path": ["users", "1"]
+            },
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ]
+          }
+        },
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/users",
+              "host": ["{{base_url}}"],
+              "path": ["users"]
+            },
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "url": {
+              "raw": "{{base_url}}/users/1",
+              "host": ["{{base_url}}"],
+              "path": ["users", "1"]
+            },
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Jane Doe\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/users/1",
+              "host": ["{{base_url}}"],
+              "path": ["users", "1"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Posts",
+      "item": [
+        {
+          "name": "List Posts",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/posts",
+              "host": ["{{base_url}}"],
+              "path": ["posts"]
+            }
+          }
+        },
+        {
+          "name": "Create Post",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/posts",
+              "host": ["{{base_url}}"],
+              "path": ["posts"]
+            },
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Hello World\",\n  \"body\": \"This is a test post\",\n  \"userId\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/health"
+      }
+    }
+  ]
+}
