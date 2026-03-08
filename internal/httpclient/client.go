@@ -2,8 +2,10 @@ package httpclient
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
@@ -13,6 +15,8 @@ import (
 	"github.com/mitss1/lazypostman/internal/environment"
 )
 
+const maxResponseBodySize = 10 * 1024 * 1024 // 10MB
+
 // Response holds the result of an HTTP request
 type Response struct {
 	StatusCode int
@@ -21,6 +25,7 @@ type Response struct {
 	Body       string
 	Duration   time.Duration
 	Size       int64
+	Truncated  bool
 	Error      error
 }
 
@@ -40,7 +45,7 @@ func New(envManager *environment.Manager) *Client {
 }
 
 // Execute runs a Postman request and returns the response
-func (c *Client) Execute(req *collection.Request) *Response {
+func (c *Client) Execute(ctx context.Context, req *collection.Request) *Response {
 	if req == nil {
 		return &Response{Error: fmt.Errorf("nil request")}
 	}
@@ -69,17 +74,19 @@ func (c *Client) Execute(req *collection.Request) *Response {
 			contentType = "application/x-www-form-urlencoded"
 		case "formdata":
 			var buf bytes.Buffer
+			w := multipart.NewWriter(&buf)
 			for _, kv := range req.Body.FormData {
 				if !kv.Disabled {
-					buf.WriteString(fmt.Sprintf("%s=%s&", c.resolve(kv.Key), c.resolve(kv.Value)))
+					_ = w.WriteField(c.resolve(kv.Key), c.resolve(kv.Value))
 				}
 			}
+			w.Close()
 			body = &buf
-			contentType = "multipart/form-data"
+			contentType = w.FormDataContentType()
 		}
 	}
 
-	httpReq, err := http.NewRequest(method, resolvedURL, body)
+	httpReq, err := http.NewRequestWithContext(ctx, method, resolvedURL, body)
 	if err != nil {
 		return &Response{Error: fmt.Errorf("creating request: %w", err)}
 	}
@@ -127,7 +134,7 @@ func (c *Client) Execute(req *collection.Request) *Response {
 	}
 	defer resp.Body.Close()
 
-	bodyBytes, err := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodySize))
 	if err != nil {
 		return &Response{
 			StatusCode: resp.StatusCode,
@@ -138,6 +145,8 @@ func (c *Client) Execute(req *collection.Request) *Response {
 		}
 	}
 
+	truncated := int64(len(bodyBytes)) >= maxResponseBodySize
+
 	return &Response{
 		StatusCode: resp.StatusCode,
 		Status:     resp.Status,
@@ -145,6 +154,7 @@ func (c *Client) Execute(req *collection.Request) *Response {
 		Body:       string(bodyBytes),
 		Duration:   duration,
 		Size:       int64(len(bodyBytes)),
+		Truncated:  truncated,
 	}
 }
 

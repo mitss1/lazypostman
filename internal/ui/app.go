@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -45,8 +46,9 @@ type environmentFetchedMsg struct {
 }
 
 type loginResultMsg struct {
-	user *postman.UserInfo
-	err  error
+	user    *postman.UserInfo
+	err     error
+	saveErr error
 }
 
 // App is the main TUI model
@@ -68,8 +70,9 @@ type App struct {
 	maximized  int // -1 = none, 0=tree, 1=request, 2=response
 
 	// Postman Cloud
-	pmClient *postman.Client
-	pmConfig *postman.Config
+	pmClient      *postman.Client
+	pmConfig      *postman.Config
+	logoutConfirm bool
 }
 
 func NewApp(col *collection.Collection, envMgr *environment.Manager) App {
@@ -144,11 +147,15 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.resp.Error != nil {
 			a.statusMsg = fmt.Sprintf("Error: %s", msg.resp.Error)
 		} else {
-			a.statusMsg = fmt.Sprintf("%s  %dms  %s",
+			status := fmt.Sprintf("%s  %dms  %s",
 				msg.resp.Status,
 				msg.resp.Duration.Milliseconds(),
 				formatSize(msg.resp.Size),
 			)
+			if msg.resp.Truncated {
+				status += "  (truncated: body > 10MB)"
+			}
+			a.statusMsg = status
 		}
 		return a, nil
 
@@ -158,7 +165,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 		a.login.Hide()
-		a.statusMsg = fmt.Sprintf("Logged in as %s", msg.user.FullName)
+		a.pmConfig = &postman.Config{APIKey: a.login.Value()}
+		a.pmClient = postman.NewClient(a.pmConfig.APIKey)
+		if msg.saveErr != nil {
+			a.statusMsg = fmt.Sprintf("Logged in as %s (warning: could not save config: %s)", msg.user.FullName, msg.saveErr)
+		} else {
+			a.statusMsg = fmt.Sprintf("Logged in as %s", msg.user.FullName)
+		}
 		return a, nil
 
 	case collectionsLoadedMsg:
@@ -231,8 +244,8 @@ func (a App) handleLoginKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			// Save config
 			cfg := &postman.Config{APIKey: apiKey}
-			_ = postman.SaveConfig(cfg)
-			return loginResultMsg{user: user}
+			saveErr := postman.SaveConfig(cfg)
+			return loginResultMsg{user: user, saveErr: saveErr}
 		}
 	case "backspace", "ctrl+h":
 		a.login.Backspace()
@@ -300,6 +313,11 @@ func (a App) browserSelect() (tea.Model, tea.Cmd) {
 // --- Main key handling ---
 
 func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Reset logout confirmation on any key except L
+	if msg.String() != "L" {
+		a.logoutConfirm = false
+	}
+
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return a, tea.Quit
@@ -318,7 +336,19 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.tree.MoveDown()
 			a.updateSelectedRequest()
 		case PanelRequest:
-			a.detail.ScrollReqDown(a.detail.ReqContentLines())
+			req := a.tree.SelectedRequest()
+			switch a.detail.tab {
+			case 0: // Params - move cursor
+				if req != nil {
+					a.detail.MoveReqCursorDown(len(req.URL.Query))
+				}
+			case 1: // Headers - move cursor
+				if req != nil {
+					a.detail.MoveReqCursorDown(len(req.Header))
+				}
+			default:
+				a.detail.ScrollReqDown(a.detail.ReqContentLines())
+			}
 		case PanelResponse:
 			a.detail.ScrollRespDown(a.detail.RespContentLines())
 		}
@@ -330,7 +360,12 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.tree.MoveUp()
 			a.updateSelectedRequest()
 		case PanelRequest:
-			a.detail.ScrollReqUp()
+			switch a.detail.tab {
+			case 0, 1: // Params or Headers - move cursor
+				a.detail.MoveReqCursorUp()
+			default:
+				a.detail.ScrollReqUp()
+			}
 		case PanelResponse:
 			a.detail.ScrollRespUp()
 		}
@@ -338,13 +373,13 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "l", "right":
 		if a.focus == PanelTree {
-			a.tree.Toggle()
+			a.tree.Expand()
 		}
 		return a, nil
 
 	case "h", "left":
 		if a.focus == PanelTree {
-			a.tree.Toggle()
+			a.tree.Collapse()
 		}
 		return a, nil
 
@@ -377,7 +412,16 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "L":
 		if a.pmConfig != nil && a.pmConfig.IsLoggedIn() {
-			a.statusMsg = "Already logged in. Config: ~/.config/lazypostman/config.json"
+			if a.logoutConfirm {
+				a.logoutConfirm = false
+				_ = postman.DeleteConfig()
+				a.pmClient = nil
+				a.pmConfig = &postman.Config{}
+				a.statusMsg = "Logged out"
+			} else {
+				a.logoutConfirm = true
+				a.statusMsg = "Press 'L' again to logout"
+			}
 		} else {
 			a.login.Show()
 		}
@@ -399,6 +443,9 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "g":
 		switch a.focus {
+		case PanelTree:
+			a.tree.MoveToTop()
+			a.updateSelectedRequest()
 		case PanelRequest:
 			a.detail.ResetReqScroll()
 		case PanelResponse:
@@ -408,6 +455,9 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "G":
 		switch a.focus {
+		case PanelTree:
+			a.tree.MoveToBottom()
+			a.updateSelectedRequest()
 		case PanelRequest:
 			a.detail.ScrollReqToBottom()
 		case PanelResponse:
@@ -489,7 +539,7 @@ func (a *App) sendRequest() (tea.Model, tea.Cmd) {
 
 	client := a.client
 	return a, func() tea.Msg {
-		resp := client.Execute(req)
+		resp := client.Execute(context.Background(), req)
 		return responseMsg{resp: resp}
 	}
 }
@@ -577,16 +627,18 @@ func (a *App) openEditor() (tea.Model, tea.Cmd) {
 		}
 		switch a.detail.tab {
 		case 0: // Params
-			if len(req.URL.Query) > 0 {
-				q := req.URL.Query[0]
-				a.editor.Open(EditParamValue, fmt.Sprintf("Param: %s", q.Key), q.Value, 0)
+			idx := a.detail.ReqCursor()
+			if idx < len(req.URL.Query) {
+				q := req.URL.Query[idx]
+				a.editor.Open(EditParamValue, fmt.Sprintf("Param: %s", q.Key), q.Value, idx)
 			} else {
 				a.statusMsg = "No params to edit"
 			}
 		case 1: // Headers
-			if len(req.Header) > 0 {
-				h := req.Header[0]
-				a.editor.Open(EditHeaderValue, fmt.Sprintf("Header: %s", h.Key), h.Value, 0)
+			idx := a.detail.ReqCursor()
+			if idx < len(req.Header) {
+				h := req.Header[idx]
+				a.editor.Open(EditHeaderValue, fmt.Sprintf("Header: %s", h.Key), h.Value, idx)
 			} else {
 				a.statusMsg = "No headers to edit"
 			}

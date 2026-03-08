@@ -71,6 +71,19 @@ func SaveConfig(cfg *Config) error {
 	return os.WriteFile(path, data, 0600)
 }
 
+// DeleteConfig removes the config file
+func DeleteConfig() error {
+	path, err := configPath()
+	if err != nil {
+		return err
+	}
+	err = os.Remove(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return err
+}
+
 // IsLoggedIn returns true if an API key is configured
 func (c *Config) IsLoggedIn() bool {
 	return c.APIKey != ""

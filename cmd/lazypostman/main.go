@@ -12,7 +12,14 @@ import (
 	"github.com/mitss1/lazypostman/internal/ui"
 )
 
+var version = "dev"
+
 func main() {
+	if len(os.Args) >= 2 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
+		fmt.Printf("lazypostman %s\n", version)
+		os.Exit(0)
+	}
+
 	envMgr := environment.NewManager()
 
 	var col *collection.Collection

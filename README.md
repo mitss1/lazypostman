@@ -48,6 +48,12 @@ lazypostman/
 
 ## Installation
 
+### Homebrew (macOS/Linux)
+
+```bash
+brew install mitss1/tap/lazypostman
+```
+
 ### Build from source
 
 ```bash
@@ -111,7 +117,7 @@ Environment files matching `*.postman_environment.json` in the same directory as
 |---------------|-------------------------------------|
 | `o`           | Browse collections from Postman Cloud |
 | `E`           | Browse environments from Postman Cloud |
-| `L`           | Login with Postman API key          |
+| `L`           | Login with Postman API key / Logout (press twice) |
 
 ### Editor (when open)
 
@@ -191,7 +197,9 @@ Same stack as [lazygit](https://github.com/jesseduffield/lazygit) and [lazydocke
 - [ ] OAuth2 flow support
 - [ ] Import from OpenAPI/Swagger
 - [ ] Custom themes and keybinding config
-- [ ] `goreleaser` for Homebrew/AUR/Scoop distribution
+- [x] Logout capability
+- [x] `goreleaser` for Homebrew/AUR/Scoop distribution
+- [x] `--version` flag
 
 ## License
 

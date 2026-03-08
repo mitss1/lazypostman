@@ -130,7 +130,8 @@ type FlatItem struct {
 	Item   *Item
 	Depth  int
 	IsOpen bool
-	Index  int // index in flat list
+	Index  int    // index in flat list
+	Path   string // hierarchical path for unique identification
 }
 
 // Load reads and parses a Postman collection file
@@ -155,20 +156,25 @@ func Load(path string) (*Collection, error) {
 
 // Flatten converts the tree structure into a flat list for display
 func Flatten(items []Item, depth int, openFolders map[string]bool) []FlatItem {
+	return flattenWithPath(items, depth, "", openFolders)
+}
+
+func flattenWithPath(items []Item, depth int, parentPath string, openFolders map[string]bool) []FlatItem {
 	var result []FlatItem
 	for i := range items {
 		item := &items[i]
-		path := itemPath(item, depth)
+		path := ItemPath(item, parentPath)
 		isOpen := openFolders[path]
 
 		result = append(result, FlatItem{
 			Item:   item,
 			Depth:  depth,
 			IsOpen: isOpen,
+			Path:   path,
 		})
 
 		if item.IsFolder() && isOpen {
-			children := Flatten(item.Items, depth+1, openFolders)
+			children := flattenWithPath(item.Items, depth+1, path, openFolders)
 			result = append(result, children...)
 		}
 	}
@@ -179,8 +185,12 @@ func Flatten(items []Item, depth int, openFolders map[string]bool) []FlatItem {
 	return result
 }
 
-func itemPath(item *Item, depth int) string {
-	return fmt.Sprintf("%d:%s", depth, item.Name)
+// ItemPath builds a unique hierarchical path for a tree item
+func ItemPath(item *Item, parentPath string) string {
+	if parentPath == "" {
+		return item.Name
+	}
+	return parentPath + "/" + item.Name
 }
 
 // MethodColor returns a color hex for the HTTP method

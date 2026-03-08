@@ -21,6 +21,7 @@ type DetailModel struct {
 	respTab    int // 0=body, 1=headers
 	reqScroll  int
 	respScroll int
+	reqCursor  int // selected param/header index
 }
 
 func NewDetailModel() DetailModel {
@@ -36,6 +37,26 @@ func (m *DetailModel) SetRequest(req *collection.Request) {
 	m.request = req
 	m.tab = 0
 	m.reqScroll = 0
+	m.reqCursor = 0
+}
+
+// ReqCursor returns the currently selected param/header index
+func (m *DetailModel) ReqCursor() int {
+	return m.reqCursor
+}
+
+// MoveReqCursorUp moves the cursor up in the params/headers list
+func (m *DetailModel) MoveReqCursorUp() {
+	if m.reqCursor > 0 {
+		m.reqCursor--
+	}
+}
+
+// MoveReqCursorDown moves the cursor down in the params/headers list
+func (m *DetailModel) MoveReqCursorDown(max int) {
+	if m.reqCursor < max-1 {
+		m.reqCursor++
+	}
 }
 
 func (m *DetailModel) SetResponse(resp *httpclient.Response) {
@@ -102,6 +123,7 @@ func (m *DetailModel) ScrollRespToBottom() {
 
 func (m *DetailModel) NextTab() {
 	m.tab = (m.tab + 1) % 3
+	m.reqCursor = 0
 }
 
 func (m *DetailModel) NextRespTab() {
@@ -109,6 +131,20 @@ func (m *DetailModel) NextRespTab() {
 }
 
 func (m *DetailModel) RequestView() string {
+	return m.requestContent(true)
+}
+
+// ReqContentLines returns the total line count of request content (for scroll bounds)
+func (m *DetailModel) ReqContentLines() int {
+	return strings.Count(m.RequestViewFull(), "\n") + 1
+}
+
+// RequestViewFull returns unclipped request content (used for line counting)
+func (m *DetailModel) RequestViewFull() string {
+	return m.requestContent(false)
+}
+
+func (m *DetailModel) requestContent(clip bool) string {
 	if m.request == nil {
 		dim := lipgloss.NewStyle().Foreground(lipgloss.Color("#888888"))
 		return dim.Render("  Select a request from the tree")
@@ -147,11 +183,15 @@ func (m *DetailModel) RequestView() string {
 		if len(m.request.URL.Query) == 0 {
 			b.WriteString(dimText("  No query parameters"))
 		} else {
-			for _, q := range m.request.URL.Query {
+			for i, q := range m.request.URL.Query {
+				cursor := "  "
+				if i == m.reqCursor {
+					cursor = "> "
+				}
 				if q.Disabled {
-					b.WriteString(fmt.Sprintf("  %s = %s (disabled)\n", dimText(q.Key), dimText(q.Value)))
+					b.WriteString(fmt.Sprintf("%s%s = %s (disabled)\n", cursor, dimText(q.Key), dimText(q.Value)))
 				} else {
-					b.WriteString(fmt.Sprintf("  %s = %s\n", keyText(q.Key), valText(q.Value)))
+					b.WriteString(fmt.Sprintf("%s%s = %s\n", cursor, keyText(q.Key), valText(q.Value)))
 				}
 			}
 		}
@@ -159,11 +199,15 @@ func (m *DetailModel) RequestView() string {
 		if len(m.request.Header) == 0 {
 			b.WriteString(dimText("  No headers"))
 		} else {
-			for _, h := range m.request.Header {
+			for i, h := range m.request.Header {
+				cursor := "  "
+				if i == m.reqCursor {
+					cursor = "> "
+				}
 				if h.Disabled {
-					b.WriteString(fmt.Sprintf("  %s: %s (disabled)\n", dimText(h.Key), dimText(h.Value)))
+					b.WriteString(fmt.Sprintf("%s%s: %s (disabled)\n", cursor, dimText(h.Key), dimText(h.Value)))
 				} else {
-					b.WriteString(fmt.Sprintf("  %s: %s\n", keyText(h.Key), valText(h.Value)))
+					b.WriteString(fmt.Sprintf("%s%s: %s\n", cursor, keyText(h.Key), valText(h.Value)))
 				}
 			}
 		}
@@ -187,32 +231,10 @@ func (m *DetailModel) RequestView() string {
 		}
 	}
 
-	return clipLines(b.String(), m.reqScroll, m.height-5)
-}
-
-// ReqContentLines returns the total line count of request content (for scroll bounds)
-func (m *DetailModel) ReqContentLines() int {
-	return strings.Count(m.RequestViewFull(), "\n") + 1
-}
-
-// RequestViewFull returns unclipped request content (used for line counting)
-func (m *DetailModel) RequestViewFull() string {
-	// Delegate to RequestView but we need the raw content
-	// We'll use a simple approach - count from the current view data
-	if m.request == nil {
-		return ""
+	if clip {
+		return clipLines(b.String(), m.reqScroll, m.height-5)
 	}
-	switch m.tab {
-	case 0:
-		return fmt.Sprintf("%d lines", len(m.request.URL.Query))
-	case 1:
-		return fmt.Sprintf("%d lines", len(m.request.Header))
-	case 2:
-		if m.request.Body != nil {
-			return m.request.Body.Raw
-		}
-	}
-	return ""
+	return b.String()
 }
 
 func (m *DetailModel) ResponseView() string {

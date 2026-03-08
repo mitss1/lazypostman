@@ -51,9 +51,54 @@ func (m *TreeModel) Toggle() {
 	}
 	item := m.items[m.cursor]
 	if item.Item.IsFolder() {
-		path := fmt.Sprintf("%d:%s", item.Depth, item.Item.Name)
-		m.openFolders[path] = !m.openFolders[path]
+		m.openFolders[item.Path] = !m.openFolders[item.Path]
 		m.rebuild()
+	}
+}
+
+// Expand opens the folder at cursor (no-op if already open or not a folder)
+func (m *TreeModel) Expand() {
+	if m.cursor >= len(m.items) {
+		return
+	}
+	item := m.items[m.cursor]
+	if item.Item.IsFolder() && !m.openFolders[item.Path] {
+		m.openFolders[item.Path] = true
+		m.rebuild()
+	}
+}
+
+// Collapse closes the folder at cursor, or moves to parent folder
+func (m *TreeModel) Collapse() {
+	if m.cursor >= len(m.items) {
+		return
+	}
+	item := m.items[m.cursor]
+	if item.Item.IsFolder() && m.openFolders[item.Path] {
+		m.openFolders[item.Path] = false
+		m.rebuild()
+		return
+	}
+	// Move to parent folder
+	if item.Depth > 0 {
+		for i := m.cursor - 1; i >= 0; i-- {
+			if m.items[i].Depth < item.Depth && m.items[i].Item.IsFolder() {
+				m.cursor = i
+				return
+			}
+		}
+	}
+}
+
+// MoveToTop moves the cursor to the first item
+func (m *TreeModel) MoveToTop() {
+	m.cursor = 0
+}
+
+// MoveToBottom moves the cursor to the last item
+func (m *TreeModel) MoveToBottom() {
+	if len(m.items) > 0 {
+		m.cursor = len(m.items) - 1
 	}
 }
 
