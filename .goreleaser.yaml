@@ -42,6 +42,7 @@ brews:
   - repository:
       owner: mitss1
       name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: "https://github.com/mitss1/lazypostman"
     description: "A terminal UI for Postman collections"
     license: "MIT"
