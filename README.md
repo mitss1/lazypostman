@@ -2,6 +2,8 @@
 
 A lazygit-style terminal UI for working with Postman collections. Built with Go and [Bubbletea](https://github.com/charmbracelet/bubbletea).
 
+![demo](demo.gif)
+
 ![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 
